@@ -24,3 +24,13 @@ $$
 L_o(p,\omega_o)\approx \frac{\int_{\Omega^+}V(p,\omega_i)d\omega_i}{\int_{\Omega^+}d\omega_i} \cdot \int_{\Omega^+}L_i(p,\omega_i)f_r(p,\omega_i,\omega_o)\cos\theta_id\omega_i
 $$
 这样可见函数就从shading中拆分了出来，成为了Shadow mapping的理论基础
+
+## PCF
+
+对shading point在Shadow map上对应的像素周围的所有像素判断是否在阴影内，并对是否在阴影内的结果（0/1）进行平均。可以使用随机分布的采样点在Shadow map上进行采样
+
+## PCSS
+
+
+
+![PCSS](D:\Code\CG\202\GAMES202-note\03-note.assets\image-20210408172805192.png)
