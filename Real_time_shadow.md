@@ -35,7 +35,7 @@ $$
 
   1. 首先根据Receiver的深度，计算要进行Blocker search的区域的大小。
 
-     ![image-20210413114216574](D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413114216574.png) ![image-20210413112300981](D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413112300981.png)
+     ![image-20210413114216574](Real_time_shadow.assets\image-20210413114216574.png) ![image-20210413112300981](Real_time_shadow.assets\image-20210413112300981.png)
      $$
      W_{light}=\frac{LightSize}{FrustumWidth}
      $$
@@ -66,7 +66,7 @@ $$
 
  		3. 根据Blocker的平均深度，计算PCF过滤核的半径。
 
-![image-20210413114426241](D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413114426241.png)
+![image-20210413114426241](Real_time_shadow.assets\image-20210413114426241.png)
 
 
 $$
@@ -97,7 +97,7 @@ $$
 
   2. 对于PCSS的第一步，目的是求解Shadow map上被遮挡区域的平均深度（图中蓝色部分）。
 
-     <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413160757177.png" alt="image-20210413160757177" style="zoom:67%;" />
+     <img src="Real_time_shadow.assets\image-20210413160757177.png" alt="image-20210413160757177" style="zoom:67%;" />
 
      设被遮挡区域的平均深度为$\bar{z}_{occ}$，未被遮挡部分的平均深度为$\bar{z}_{unocc}$，那么有
      $$
@@ -111,7 +111,7 @@ $$
 
   1. Mipmap
 
-     <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413163038160.png" alt="image-20210413163038160" style="zoom:80%;" />
+     <img src="Real_time_shadow.assets\image-20210413163038160.png" alt="image-20210413163038160" style="zoom:80%;" />
 
      Mipmap的范围查询，存在不准的问题。
 
@@ -121,13 +121,13 @@ $$
 
      SAT查询：
 
-     ![image-20210413163520570](D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413163520570.png)
+     ![image-20210413163520570](Real_time_shadow.assets\image-20210413163520570.png)
 
 * VSSM缺陷
 
   Chebyshev不等式的局限：只能对概率密度函数只有一个峰值的分布进行估计，且只有在$t>\mu$时成立，可能会产生漏光的现象。
 
-  <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413164213019.png" alt="image-20210413164213019" style="zoom:80%;" />
+  <img src="Real_time_shadow.assets\image-20210413164213019.png" alt="image-20210413164213019" style="zoom:80%;" />
 
 ## MSM (Moment Shadow Mapping)
 
@@ -135,7 +135,7 @@ $$
 
   MSM使用更高阶的矩进行概率估计$x,x^2,x^3,x^4,...$，相比之下，VSSM只用了前两阶矩。前$m$阶矩可以表示有$\frac{m}{2}$个“台阶“”的概率累计分布函数。一般使用4阶矩。
 
-  ![image-20210413165311916](D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413165311916.png)
+  ![image-20210413165311916](Real_time_shadow.assets\image-20210413165311916.png)
 
   
 
@@ -145,15 +145,15 @@ $$
 
 * 向光源方向Ray March时，每次步进，SDF都会返回距离步进点最近的物体表面的距离，这个“安全”距离可以转化为一个“安全”角度，角度越大，意味着这个角度范围内，被遮挡的部分越少，可见性约接近于1；角度越小，越有可能被遮挡，可见性越接近于0。
 
-  <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413170631217.png" alt="image-20210413170631217" style="zoom:80%;" />
+  <img src="Real_time_shadow.assets\image-20210413170631217.png" alt="image-20210413170631217" style="zoom:80%;" />
 
 * 向光源方向Ray March时，取角度的最小值计算最终的可见度。
 
-  <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413171633765.png" alt="image-20210413171633765" style="zoom: 67%;" />
+  <img src="Real_time_shadow.assets\image-20210413171633765.png" alt="image-20210413171633765" style="zoom: 67%;" />
 
 * 可见度计算：
   $$
   v=\min\{\frac{k\cdot SDF(p)}{p-o},1.0\}
   $$
-  <img src="D:\Code\CG\202\GAMES202-note\Real_time_shadow.assets\image-20210413171909687.png" alt="image-20210413171909687"  />
+  <img src="Real_time_shadow.assets\image-20210413171909687.png" alt="image-20210413171909687"  />
 
