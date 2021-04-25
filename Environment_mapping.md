@@ -59,8 +59,8 @@
     $$
     因此有PDF$p(\omega_i)=\frac{D}{4(\omega_o \cdot \omega_h)}$
     
-    具体的代码如下：
-    
+  * 代码：
+  
     ```c
     float3 SpecularIBL( float3 SpecularColor , float Roughness, float3 N, float3 V )
     {
@@ -93,27 +93,59 @@
   
 * $\int_{\Omega^+}f_r(p,\omega_i,\omega_o)\cos\theta_id\omega_i$的计算
 
-  * 原理：
+  * 原理：对于BRDF，实际上受到了三个变量的影响：菲涅尔项中的$R_0$，半角$\theta$和粗糙度$\alpha$。因此可以考虑消去较为简单的$R_0$，并对所有可能的$\theta, \alpha$进行预计算，建立查找表。
+  $$
+    \begin{align}
+    \int_{\Omega^+}f_r(p,\omega_i,\omega_o)\cos\theta_id\omega_i &= \int_{\Omega^+}f_r(p,\omega_i,\omega_0)\frac{F(\omega_o,h)}{F(\omega_o,h)}\cos \theta_i d\omega_i \\
+    &= \int_{\Omega^+}\frac{f_r(p,\omega_i,\omega_o)}{F(\omega_o,h)}F(\omega_o,h)\cos \theta_i d\omega_i \\
+    &= \int_{\Omega^+}\frac{f_r(p,\omega_i,\omega_o)}{F(\omega_o,h)}[R_0+(1-R_0)(1-\cos \theta_i)^5] \cos \theta_i d\omega_i \\
+    &=R_0\int_{\Omega^+}\frac{f_r}{F}[1-(1-\cos \theta_i)^5]\cos \theta_i d\omega_i + \int_{\Omega^+}\frac{f_r}{F}(1-\cos \theta_i)^5\cos \theta_i d\omega_i \\
+    
+    \end{align}
+    $$
+  
+  ​		由此，就可以对所有$\cos \theta_i \in[0,1],\alpha\in[0,1]$，建立二维的查找表，分别计算出对应的$\int_{\Omega^+}\frac{f_r}{F}[1-(1-\cos \theta_i)^5]\cos \theta_i d\omega_i$和$\int_{\Omega^+}\frac{f_r}{F}(1-\cos \theta_i)^5\cos \theta_i d\omega_i$，存入对应位置的RG通道
+  
+  ![image-20210425231505639](Environment_mapping.assets/image-20210425231505639.png)
+  
+    * 代码
+  
+      ```c
+      float2 IntegrateBRDF( float Roughness, float NoV )
+      {
+          float3 V;
+          V.x = sqrt( 1.0f - NoV * NoV ); // sin
+          V.y = 0;
+          V.z = NoV; // cos
+          float A = 0;
+          float B = 0;
+          const uint NumSamples = 1024;
+          for( uint i = 0; i < NumSamples; i++ )
+          {
+              float2 Xi = Hammersley( i, NumSamples );
+              float3 H = ImportanceSampleGGX( Xi, Roughness, N );
+              float3 L = 2 * dot( V, H ) * H - V;
+              float NoL = saturate( L.z );
+              float NoH = saturate( H.z );
+              float VoH = saturate( dot( V, H ) );
+              if( NoL > 0 )
+              {
+                  float G = G_Smith( Roughness, NoV, NoL );
+                  float G_Vis = G * VoH / (NoH * NoV);
+                  float Fc = pow( 1 - VoH, 5 );
+                  A += (1 - Fc) * G_Vis;
+                  B += Fc * G_Vis;
+              }
+          }
+          return float2( A, B ) / NumSamples;
+      }
+      ```
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+## Spherical Harmonics
+
+
+
+
 
 ## Appendix
 
