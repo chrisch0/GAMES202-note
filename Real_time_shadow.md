@@ -35,7 +35,7 @@ $$
 
   1. 首先根据Receiver的深度，计算要进行Blocker search的区域的大小。
 
-     ![image-20210413114216574](Real_time_shadow.assets\image-20210413114216574.png) ![image-20210413112300981](Real_time_shadow.assets\image-20210413112300981.png)
+     <img src="Real_time_shadow.assets\image-20210413114216574.png" alt="image-20210413114216574" style="zoom:67%;" /> <img src="Real_time_shadow.assets\image-20210413112300981.png" alt="image-20210413112300981" style="zoom: 70%;" />
      $$
      W_{light}=\frac{LightSize}{FrustumWidth}
      $$

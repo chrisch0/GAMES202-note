@@ -36,11 +36,64 @@
     \phi&=2\pi\xi_{\phi}
     \end{align}
     $$
-    获得符合GGX概率分布的球坐标系坐标$(\theta,\phi)$
+    获得符合GGX概率分布的球坐标系坐标$(\theta,\phi)$，使用该坐标可以计算出对应的微面元半角向量（图中$\omega_h$）。设宏面元的法线方向为光线的反射方向（图中$\omega_o$），就可以根据半角向量计算出光线的入射方向（图中$\omega_i$），然后在环境贴图中进行采样，并计算加权的光照。
+    
+    ![image-20210425164644183](Environment_mapping.assets/image-20210425164644183.png)
+    
+    计算加权光照的公式如下（蒙特卡洛估计）：
+    $$
+    \int\limits_H L_i(\vec{\omega}_i)f(\vec{\omega}_i,\vec{\omega}_o)\cos \theta_{\vec{\omega}_i}d\vec{\omega}_i \approx \frac{1}{N}\sum\limits_{k=1}^{N}\frac{L_i(\vec{\omega}_{ik})f(\vec{\omega}_{ik},\vec{\omega}_{ok})\left|\cos \theta_{\vec{\omega}_{ik}} \right|}{p\left(\vec{\omega}_{ik},\vec{\omega}_o\right)}
+    $$
+    其中，由于是关于光线入射方向的积分，因此$p\left(\vec{\omega}_{ik},\vec{\omega}_o\right)$应该是关于入射方向$\omega_i$的PDF函数。已有的PDF函数是关于半角向量$\omega_h$的GGX NDF PDF，需要将其转变为关于入射方向$\omega_i$的PDF：
+    $$
+    p(\vec{\omega}_i)d\vec{\omega}_i = p(\vec{\omega}_h)d\vec{\omega}_h
+    $$
+    由图可知，有$\theta_i=2\theta_h$（$\theta_i$为$\omega_o$和$\omega_i$之间的角度，因为$\omega_i$是由$\omega_o$和$\omega_h$利用反射方程计算的），$\phi_i=\phi_h$因此有：
+    $$
+    \begin{align}
+    \frac{d\vec{\omega}_h}{d\vec{\omega}_i} &= \frac{\sin \theta_h d\theta_h d\phi_h}{\sin 2\theta_h 2d\theta_hd\phi_h} \\
+    &=\frac{\sin \theta_h}{4\cos \theta_h \sin \theta_h} \\
+    &=\frac{1}{4\cos \theta_h} \\
+    &=\frac{1}{4(\omega_i \cdot \omega_h)}=\frac{1}{4(\omega_o \cdot \omega_h)}
+    \end{align}
+    $$
+    因此有PDF$p(\omega_i)=\frac{D}{4(\omega_o \cdot \omega_h)}$
+    
+    具体的代码如下：
+    
+    ```c
+    float3 SpecularIBL( float3 SpecularColor , float Roughness, float3 N, float3 V )
+    {
+        float3 SpecularLighting = 0;
+        const uint NumSamples = 1024;
+        for( uint i = 0; i < NumSamples; i++ )
+        {
+            float2 Xi = Hammersley( i, NumSamples );
+            float3 H = ImportanceSampleGGX( Xi, Roughness, N );
+            float3 L = 2 * dot( V, H ) * H - V;
+            float NoV = saturate( dot( N, V ) );
+            float NoL = saturate( dot( N, L ) );
+            float NoH = saturate( dot( N, H ) );
+            float VoH = saturate( dot( V, H ) );
+            if( NoL > 0 )
+            {
+                float3 SampleColor = EnvMap.SampleLevel( EnvMapSampler , L, 0 ).rgb;
+                float G = G_Smith( Roughness, NoV, NoL );
+                float Fc = pow( 1 - VoH, 5 );
+                float3 F = (1 - Fc) * SpecularColor + Fc;
+                // Incident light = SampleColor * NoL
+                // Microfacet specular = D*G*F*NoH / (4*NoL*NoV)
+                // pdf = D / (4 * VoH)
+                SpecularLighting += SampleColor * F * G * VoH / (NoH * NoV);
+            }
+        }
+        return SpecularLighting / NumSamples;
+    }
+    ```
   
 * $\int_{\Omega^+}f_r(p,\omega_i,\omega_o)\cos\theta_id\omega_i$的计算
 
-  
+  * 原理：
 
   
   
@@ -110,6 +163,26 @@ $$
 可得$P_{\theta}^{-1}(\xi_{\theta})=\arccos \sqrt{\frac{1-\xi_{\theta}}{\xi_{\theta}(\alpha^2-1)+1}}=\arctan \alpha \sqrt{\frac{\xi_{\theta}}{1-\xi_{\theta}}}$
 
 因此可生成二维平面内的低差异性序列（Hammersley 序列）随机变量$(\xi_{\phi}^i,\xi_{\theta}^i)$，代入$P^{-1}_{\phi}$和$P_{\theta}^{-1}$得到附和GGX概率分布的球坐标系坐标$(\phi^i,\theta^i)$
+
+```c
+float3 ImportanceSampleGGX( float2 Xi, float Roughness, float3 N )
+{
+    float a = Roughness * Roughness;
+    float Phi = 2 * PI * Xi.x;
+    float CosTheta = sqrt( (1 - Xi.y) / ( 1 + (a*a - 1) * Xi.y ) );
+    float SinTheta = sqrt( 1 - CosTheta * CosTheta );
+    float3 H;
+    H.x = SinTheta * cos( Phi );
+    H.y = SinTheta * sin( Phi );
+    H.z = CosTheta;
+    float3 UpVector = abs(N.z) < 0.999 ? float3(0,0,1) : float3(1,0,0);
+    float3 TangentX = normalize( cross( UpVector, N ) );
+    float3 TangentY = cross( N, TangentX );
+    // Tangent to world space
+    return TangentX * H.x + TangentY * H.y + N * H.z;
+}
+
+```
 
 ### 逆变换采样（Inverse Transform Sampling）
 
