@@ -90,6 +90,76 @@
         return SpecularLighting / NumSamples;
     }
     ```
+    
+    或：
+    
+    ```c
+    float3 PrefilterEnvMap( float Roughness, float3 R )
+    {
+        float3 N = R;
+        float3 V = R;
+        float3 PrefilteredColor = 0;
+        const uint NumSamples = 1024;
+        for( uint i = 0; i < NumSamples; i++ )
+        {
+            float2 Xi = Hammersley( i, NumSamples );
+            float3 H = ImportanceSampleGGX( Xi, Roughness, N );
+            float3 L = 2 * dot( V, H ) * H - V;
+            float NoL = saturate( dot( N, L ) );
+            if( NoL > 0 )
+            {
+                PrefilteredColor += EnvMap.SampleLevel( EnvMapSampler,L,0 ).rgb * NoL;
+                TotalWeight += NoL;
+            }
+        }
+        return PrefilteredColor / TotalWeight;
+    }
+    ```
+    
+    或基于积分的PDF和粗糙度，对环境光贴图的Mipmap进行采样：
+    
+    ```c
+    float3 PrefilterEnvMap( float Roughness, float3 R )
+    {
+    	float3 R = N;
+        float3 V = R;
+    
+        const uint SAMPLE_COUNT = 1024;
+        float3 prefilteredColor = 0.0;
+        float totalWeight = 0.0;
+        
+        for(uint i = 0; i < SAMPLE_COUNT; ++i)
+        {
+            // generates a sample vector that's biased towards the preferred alignment direction (importance sampling).
+            float2 Xi = Hammersley(i, SAMPLE_COUNT);
+            float3 H = ImportanceSampleGGX(Xi, N, roughness);
+            float3 L  = normalize(2.0 * dot(V, H) * H - V);
+    
+            float NdotL = max(dot(N, L), 0.0);
+            if(NdotL > 0.0)
+            {
+                // sample from the environment's mip level based on roughness/pdf
+                float D   = DistributionGGX(N, H, roughness);
+                float NdotH = max(dot(N, H), 0.0);
+                float HdotV = max(dot(H, V), 0.0);
+                float pdf = D * NdotH / (4.0 * HdotV) + 0.0001; 
+    
+                float resolution = 512.0; // resolution of source cubemap (per face)
+                float saTexel  = 4.0 * PI / (6.0 * resolution * resolution);
+                float saSample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+    
+                float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel); 
+                
+                prefilteredColor += EnvMap.SampleLevel(EnvMapSampler, L, mipLevel).rgb * NdotL;
+                totalWeight      += NdotL;
+            }
+        }
+    
+        prefilteredColor = prefilteredColor / totalWeight;
+    }
+    ```
+    
+    
   
 * $\int_{\Omega^+}f_r(p,\omega_i,\omega_o)\cos\theta_id\omega_i$的计算
 
@@ -102,13 +172,13 @@
     &=R_0\int_{\Omega^+}\frac{f_r}{F}[1-(1-\cos \theta_i)^5]\cos \theta_i d\omega_i + \int_{\Omega^+}\frac{f_r}{F}(1-\cos \theta_i)^5\cos \theta_i d\omega_i \\
     
     \end{align}
-    $$
+  $$
   
   ​		由此，就可以对所有$\cos \theta_i \in[0,1],\alpha\in[0,1]$，建立二维的查找表，分别计算出对应的$\int_{\Omega^+}\frac{f_r}{F}[1-(1-\cos \theta_i)^5]\cos \theta_i d\omega_i$和$\int_{\Omega^+}\frac{f_r}{F}(1-\cos \theta_i)^5\cos \theta_i d\omega_i$，存入对应位置的RG通道
   
   ![image-20210425231505639](Environment_mapping.assets/image-20210425231505639.png)
   
-    * 代码
+    * 代码：
   
       ```c
       float2 IntegrateBRDF( float Roughness, float NoV )
@@ -143,9 +213,70 @@
 
 ## Spherical Harmonics
 
+* 原理
 
+  定义一系列球面上的二维基函数$B_i(\omega)$，其中$l$代表阶，更高的阶数意味着更高的频率。
 
+  <img src="Environment_mapping.assets/image-20210426152816228.png" alt="image-20210426152816228" style="zoom:80%;" />
 
+  考虑环境光也是球面上的一个二维函数，就可以用前$n$阶的$n^2$个基函数的线性组合进行表示：$f(x)=\sum\limits_i c_i \cdot B_i(x)$。系数$c_i$表示$f(x)$在对应基函数上的投影：
+  $$
+  c_i=\int_\Omega f(\omega)B_i(\omega)d\omega
+  $$
+  对于Diffuse的BRDF，第三阶及之后的系数几乎都$\approx0$，因此可以使用有限阶数的球谐函数计算Diffuse的光照。
+
+  <img src="Environment_mapping.assets/image-20210426153549610.png" alt="image-20210426153549610" style="zoom:67%;" />
+
+  球谐函数具有正交性，即：
+  $$
+  \left\{
+  	\begin{array}{**lr**}
+  	\int_\Omega B_i(\omega) \cdot B_j(\omega)d\omega = 1, &i=j \\
+  	\int_\Omega B_i(\omega) \cdot B_j(\omega)d\omega = 0, &i\neq j
+  	\end{array}
+  \right.
+  $$
+  球谐函数旋转后，可以用同阶的基函数的线性组合表示。
+
+* 计算
+
+  * 漫反射
+
+    对于漫反射的物体，其BRDF函数为一个常量，因此它的渲染方程可以写为：
+    $$
+    L(\omega_o)=\rho \int_\Omega L(\omega_i)V(p,\omega_i)\max(0,\omega_i \cdot n) d\omega_i
+    $$
+    其中$L(\omega_i)$可以通过预计算，将其用球谐函数展开：
+    $$
+    L(\omega_i) \approx \sum\limits_{j=1}^{(l^*+1)^2}c_jB_j(\omega_i)
+    $$
+    <img src="Environment_mapping.assets/image-20210426160548420.png" alt="image-20210426160548420" style="zoom: 67%;" />
+
+    对渲染方程的另一部分，Light Transport项：$T(\omega_i)=V(p,\omega_i) \max(0,\omega_i \cdot n)$，也可以将其使用球谐函数展开，得到：
+    $$
+    T(\omega_i)\approx \sum\limits_k c_kB_k(\omega_i)
+    $$
+    将两项分别代入渲染方程，得到：
+    $$
+    L(\omega_o) \approx \rho \sum\limits_j \sum\limits_k c_jc_k \int_\Omega B_j(\omega_i)B_k(\omega_i) d\omega_i
+    $$
+    又因为球谐函数的正交性质，有：
+    $$
+    L(\omega_i) \approx \rho \sum\limits_p c_{jp}c_{kp}
+    $$
+    因此对于漫反射的计算，可以通过球谐简化为两个向量的点乘。
+
+  * 高光（Glossy）
+
+    对于高光物体，由于其BRDF是关于入射光和出射光两个向量的函数，因此其Light Transport项是一个四维的函数$T(\omega_i,\omega_o)=f_r(\omega_i,\omega_o)V(\omega_i)\max(0,\omega_i \cdot n)$。对其使用球谐函数进行展开，会得到一个二维的矩阵：
+    $$
+    T_k(\omega_i,\omega_{ok})=\sum t_{kj}B_j(\omega_i)
+    $$
+    渲染方程可以写作：
+    $$
+    L(\omega_o) \approx \sum \left(\sum c_jt_k\right) B_j(\omega_i)
+    $$
+    <img src="Environment_mapping.assets/image-20210426180928292.png" alt="image-20210426180928292" style="zoom:90%;" />
 
 ## Appendix
 
