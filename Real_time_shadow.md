@@ -1,3 +1,5 @@
+# Real Time Shadow
+
 ## Shadow mapping的理论基础: 
 
 式
@@ -63,8 +65,8 @@ $$
      }
      float avgBlockerDepth = blockerSum / float(numBlockers);
      ```
-
- 		3. 根据Blocker的平均深度，计算PCF过滤核的半径。
+  
+  3. 根据Blocker的平均深度，计算PCF过滤核的半径。
 
 ![image-20210413114426241](Real_time_shadow.assets\image-20210413114426241.png)
 
@@ -72,7 +74,7 @@ $$
 $$
 W_{penumbra}=\frac{z_{Receiver}-\bar{z}_{Blocker}}{\bar{z}_{Blocker}}\cdot W_{light}
 $$
-​		4. 根据计算出的$W_{penumbra}$进行PCF过滤，计算阴影系数。
+​		 4. 根据计算出的$W_{penumbra}$进行PCF过滤，计算阴影系数。
 
 * 数学描述：对可见度的卷积
   $$

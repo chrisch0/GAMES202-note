@@ -1,3 +1,5 @@
+# Environment Mapping
+
 ## IBL (Image-Based Lighting)
 
 * 理论基础
@@ -364,5 +366,4 @@ $$
 =&F(x)
 \end{align}
 $$
-
 
